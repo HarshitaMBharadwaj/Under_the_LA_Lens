@@ -42,5 +42,5 @@ The report concludes with an invitation for future research, encouraging extende
 
 ---
 
-**Note:** Feel free to unzip the file uploades to get the project details.
-
+**Note:** Feel free to check out the code and complere project details uploaded on the google drive.
+https://drive.google.com/drive/folders/1osIvCBHvK8kuyaq31ZG_AOQJLo12cYnu?usp=sharing
