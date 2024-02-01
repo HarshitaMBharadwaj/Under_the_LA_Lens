@@ -1,0 +1,828 @@
+::: {#main_title style="color: black"}
+---
+title: "Characterizing crimes in Los Angeles"
+
+date: December 10, 2023 
+format: 
+  html:
+    toc: true 
+    code-fold: true
+    code-tools: true
+    toc-location: right
+    theme: sandstone
+    self-contained: true
+editor: 
+  markdown: 
+    wrap: sentence
+---
+:::
+
+```{r}
+#| label: setup 
+#| include: false
+
+# Load libraries and settings here
+library(tidyverse)
+library(here)
+library(readr)
+library(plotly)
+library(cowplot)
+library(janitor)
+library(forcats)
+library(gganimate)
+library(ggplot2)
+library(dplyr)
+
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>",
+  fig.path = "figs/", # Folder where rendered plots are saved
+  fig.width = 7.252, # Default plot width
+  fig.height = 4, # Default plot height
+  fig.retina = 3 # For better plot resolution
+)
+
+spelling::spell_check_files("report.qmd")
+
+# Put any other "global" settings here, e.g. a ggplot theme:
+theme_set(theme_bw(base_size = 20))
+```
+
+[![](images/img1.jpeg)](https://www.bloomberg.com/view/articles/2018-02-12/pssst-crime-may-be-near-an-all-time-low)
+
+## 1. **Introduction**
+
+::: {style="text-align: justify;"}
+Amidst the vibrant tapestry of Los Angeles, where palm-lined boulevards intersect with iconic landmarks this project embarks on a meticulous exploration into the intricacies of a city that harbors brilliance and shadows.
+The comprehensive analysis of crime data casts a discerning spotlight on research questions, unraveling the evolution of criminal activities from 2020 to 2022.
+Beneath the glitzy exteriors lies a realm not overtly acknowledged, let's explore through this research.
+The impetus driving this research into crime patterns from 2020 to 2022 is grounded in the urgent need to understand complexities in a sprawling urban environment.
+The investigation holds weighty implications for policymakers and law enforcement agencies, offering insights to develop targeted strategies adaptable to shifting criminal behaviors.
+It becomes a crucial tool for shaping policies, reducing crime, and enhancing public safety in Los Angeles.
+By deciphering crime trends and potential connections to external influences, the study empowers decision-makers, contributing to fortifying the city's social fabric.
+Key findings reveal a fluctuating crime trajectory, with theft/burglary as the most prevalent crime.
+Age demographics highlight individuals aged 21 to 30 as the most frequently victimized group, followed by those aged 31 to 40.
+Geographically, Central emerges as the epicenter of crime, followed by 77th Street, Southwest, Pacific, and Hollywood, with an overall escalation in crime rates across locations from 2020 to 2022.
+Lastly, a gender-based analysis shows males as the majority of victims at 52.9%, with females accounting for 47.1%.
+In essence, this research unravels the intricate tapestry of crime in Los Angeles, offering a comprehensive understanding to inform targeted interventions for a safer and more secure urban environment.
+:::
+
+<br>
+
+## 2. Research Questions
+
+::: {style="text-align: justify;"}
+**1 -** How has crime counts in LA changed over the past three years ?
+
+**2 -** What are the geographic locations within Los Angeles that experienced the highest incidence of crime?
+
+**3 -** What age groups are affected by various types of crimes in Los Angeles?
+
+**4 -** How does the distribution of crime counts across different age groups in Los Angeles from 2020 to 2022 vary by gender ?
+
+:::
+
+<br>
+
+## 3. Discuss data sources
+
+::: {style="text-align: justify;"}
+**Data files -** Crime_Data_from_2020_to_Present.csv
+
+**Date downloaded -** September 14, 2023
+
+**Description -** This data set contains crime reports from the city of Los Angeles dating back to 2020.
+This data is copied from original crime reports that were recorded on paper, therefore there may be some mistakes.
+Some missing data location fields are denoted as (0°, 0°).
+To ensure privacy, address fields are only provided to the closest hundred block.
+
+**Source of downloaded file -** It's taken from the Data.gov website.
+Data.gov is the United States government's open data website.
+It provides access to datasets published by agencies across the federal government.
+Data.gov is intended to provide access to government open data to the public, achieve agency missions, drive innovation, fuel economic activity, and uphold the ideals of an open and transparent government.
+<https://catalog.data.gov/dataset/crime-data-from-2020-to-present>
+
+**Original source -** The original data source is provided by the Los Angeles Police Department on data.lacity.org/ website.
+<https://data.lacity.org/Public-Safety/Crime-Data-from-2020-to-Present/2nrs-mtv8>
+
+**Validity of data -** Our data comes from an authentic source, the Los Angeles Police Department.
+According to the original source, the data collected has been transcribed from original criminal reports that are typed on paper, so there may be some mistakes in the data.
+We presume the data is biased because it was collected by the LAPD.
+The different factors involved in skewed data may include the time of day the crime happened, police employment, socioeconomic and racial bias, data entry errors, political and organizational pressure, data collection methods, and so on.
+:::
+
+<br>
+
+## 4. Data Manipulation
+
+```{r,echo=TRUE, results='hide'}
+# load the data
+df1 <- read_csv(here("data_raw", "crime_data.csv"))
+
+# clean the data
+df1 <- df1 %>% 
+    clean_names()
+
+# drop unwanted columns
+df1 <- subset(df1, select = -c(dr_no, date_rptd, time_occ, rpt_dist_no, part_1_2, crm_cd, mocodes, premis_cd, weapon_used_cd, status, status_desc, crm_cd_1, crm_cd_2, crm_cd_3, crm_cd_4, lat, lon))
+
+# rename the columns
+df1 <- df1 %>% 
+    rename(date_occured = date_occ,
+           crime_description = crm_cd_desc,
+           victim_age = vict_age,
+           victim_sex = vict_sex,
+           victim_descent = vict_descent,
+           weapon_description = weapon_desc
+           )
+
+# grouping crimes into specific categories (we have categorized into 15 groups)
+df2 <- df1 %>% 
+    mutate(grouped_crime = case_when(
+        
+#THEFTS/BURGLERY
+crime_description %in% c("THEFT-GRAND ($950.01 & OVER)EXCPT,GUNS,FOWL,LIVESTK,PROD","THEFT PLAIN - PETTY ($950 & UNDER)","THEFT OF IDENTITY","THEFT, PERSON","THEFT FROM MOTOR VEHICLE - PETTY ($950 & UNDER)","TILL TAP - PETTY ($950 & UNDER)","TILL TAP - GRAND THEFT ($950.01 & OVER)","THEFT PLAIN - ATTEMPT","THEFT FROM PERSON - ATTEMPT","THEFT, COIN MACHINE - ATTEMPT","THEFT, COIN MACHINE - PETTY ($950 & UNDER)","THEFT, COIN MACHINE - GRAND ($950.01 & OVER)","GRAND THEFT / INSURANCE FRAUD","BUNCO, GRAND THEFT","PURSE SNATCHING","BURGLARY","BURGLARY FROM VEHICLE","BURGLARY, ATTEMPTED","BURGLARY FROM VEHICLE, ATTEMPTED","BUNCO, PETTY THEFT","PICKPOCKET","ROBBERY","ATTEMPTED ROBBERY","PURSE SNATCHING - ATTEMPT","PURSE SNATCHING","PICKPOCKET, ATTEMPT","PETTY THEFT ($950 & UNDER)") ~ "THEFT/BURGLARY" ,
+
+
+#ASSAULT
+crime_description %in% c("BATTERY - SIMPLE ASSAULT","ASSAULT WITH DEADLY WEAPON, AGGRAVATED ASSAULT","INTIMATE PARTNER - SIMPLE ASSAULT","INTIMATE PARTNER - AGGRAVATED ASSAULT","CHILD ABUSE (PHYSICAL) - SIMPLE ASSAULT","BATTERY POLICE (SIMPLE)","BATTERY ON A FIREFIGHTER","OTHER ASSAULT","INDECENT EXPOSURE") ~ "ASSAULT",
+
+
+#ANIMAL CRUELTY
+crime_description %in% c("CRUELTY TO ANIMALS") ~ "ANIMAL CRUELTY",
+
+
+#VANDALISM
+crime_description %in% c("VANDALISM - MISDEAMEANOR ($399 OR UNDER)","VANDALISM - FELONY ($400 & OVER, ALL CHURCH VANDALISMS)","VANDALISM - MISDEAMEANOR ($399 OR UNDER)","VANDALISM - FELONY ($400 & OVER, ALL CHURCH VANDALISMS)") ~ "VANDALISM",
+
+
+#VEHICAL THEFTS
+crime_description %in% c("VEHICLE - STOLEN","VEHICLE - ATTEMPT STOLEN","VEHICLE, STOLEN - OTHER (MOTORIZED SCOOTERS, BIKES, ETC)","BIKE - STOLEN","DRIVING WITHOUT OWNER CONSENT (DWOC)","PETTY THEFT - AUTO REPAIR","RECKLESS DRIVING","BIKE - ATTEMPTED STOLEN","BOAT - STOLEN","GRAND THEFT / AUTO REPAIR","SHOTS FIRED AT MOVING VEHICLE, TRAIN OR AIRCRAFT","THEFT FROM MOTOR VEHICLE - GRAND ($950.01 AND OVER)","THEFT FROM MOTOR VEHICLE - ATTEMPT") ~ "VEHICLE THEFT AND RULE BREAKS",
+
+
+#SHOPLIFTING
+crime_description %in% c("SHOPLIFTING - PETTY THEFT ($950 & UNDER)","SHOPLIFTING-GRAND THEFT ($950.01 & OVER)","SHOPLIFTING - ATTEMPT","SHOPLIFTING - PETTY THEFT ($950 & UNDER)") ~ "SHOPLIFTING", 
+
+
+#DRUG OFFENCES
+crime_description %in% c("DRUGS, TO A MINOR","UNAUTHORIZED COMPUTER ACCESS") ~ "DRUG OFFENSES",
+
+
+#SEXUAL ASSAULTS
+crime_description %in% c("RAPE, FORCIBLE","BATTERY WITH SEXUAL CONTACT","SEX, UNLAWFUL (INC MUTUAL CONSENT, PENETRATION W/ FRGN OBJ)","RAPE, ATTEMPTED","SODOMY/SEXUAL CONTACT B/W PENIS OF ONE PERS TO ANUS OTH",
+"ORAL COPULATION","SEX OFFENDER REGISTRANT OUT OF COMPLIANCE","SEX,UNLAWFUL(INC MUTUAL CONSENT, PENETRATION W/ FRGN OBJ","SEXUAL PENETRATION W/FOREIGN OBJECT","PIMPING","HUMAN TRAFFICKING - INVOLUNTARY SERVITUDE","HUMAN TRAFFICKING - COMMERCIAL SEX ACTS","INCEST (SEXUAL ACTS BETWEEN BLOOD RELATIVES)","LEWD CONDUCT","PEEPING TOM","BEASTIALITY, CRIME AGAINST NATURE SEXUAL ASSLT WITH ANIM") ~ "SEXUAL ASSAULTS",
+
+
+#FRUAD
+crime_description %in% c("DOCUMENT FORGERY / STOLEN FELONY","FALSE IMPRISONMENT","DOCUMENT WORTHLESS ($200 & UNDER)","DOCUMENT WORTHLESS ($200.01 & OVER)","FALSE POLICE REPORT","COUNTERFEIT","DEFRAUDING INNKEEPER/THEFT OF SERVICES, OVER $950.01","EMBEZZLEMENT, GRAND THEFT ($950.01 & OVER)","EMBEZZLEMENT","FRAUD (including credit card fraud and embezzlement)",
+"CREDIT CARDS, FRAUD USE ($950 & UND","CREDIT CARDS, FRAUD USE ($950.01 & OVER)","EXTORTION", "LETTERS, LEWD  -  TELEPHONE CALLS, LEWD","DEFRAUDING INNKEEPER/THEFT OF SERVICES, $950 & UNDER","CREDIT CARDS, FRAUD USE ($950 & UNDER","CONSPIRACY") ~ "FRAUD",
+
+
+#CHILD ABUSE/NEGLECT
+crime_description %in% c("CHILD STEALING","CRM AGNST CHLD (13 OR UNDER) (14-15 & SUSP 10 YRS OLDER)","CHILD NEGLECT (SEE 300 W.I.C.)","CHILD ABUSE (PHYSICAL) - SIMPLE ASSAULT","CHILD ABUSE (PHYSICAL) - AGGRAVATED ASSAULT","CHILD ANNOYING (17YRS & UNDER)","CHILD PORNOGRAPHY","CHILD ABANDONMENT","DISRUPT SCHOOL","LEWD/LASCIVIOUS ACTS WITH CHILD","CHILD ABUSE (PHYSICAL) - AGGRAVATED ASSAULT") ~ "CHILD ABUSE/NEGLECT" ,
+
+
+#DOMESTIC VIOLENCE
+crime_description %in% c(
+"INTIMATE PARTNER - SIMPLE ASSAULT","INTIMATE PARTNER - AGGRAVATED ASSAULT","CRIMINAL THREATS - NO WEAPON DISPLAYED","DISHONEST EMPLOYEE - PETTY THEFT","THREATENING PHONE CALLS/LETTERS","KIDNAPPING","CRIMINAL HOMICIDE","DRUNK ROLL","FAILURE TO YIELD","TELEPHONE PROPERTY - DAMAGE","	MANSLAUGHTER, NEGLIGENT","DISCHARGE FIREARMS/SHOTS FIRED","MANSLAUGHTER, NEGLIGENT","BRIBERY","KIDNAPPING - GRAND ATTEMPT","KIDNAPPING - GRAND ATTEMPT","INCITING A RIOT") ~ "DOMESTIC VIOLENCE",
+
+
+#IDENTITY THEFT
+crime_description %in% c("THEFT OF IDENTITY") ~ "IDENTITY THEFT",
+
+
+#STALKING
+crime_description %in% c("STALKING") ~ "STALKING",
+
+
+#WEAPONS POSSESSIONS
+crime_description %in% c("BRANDISH WEAPON","ASSAULT WITH DEADLY WEAPON ON POLICE OFFICER","WEAPONS POSSESSION/BOMBING","BOMB SCARE","SHOTS FIRED AT INHABITED DWELLING") ~ "WEAPONS POSSESSIONS",
+
+
+#VIOLATION OF RULES
+crime_description %in% c("VIOLATION OF COURT ORDER","TRESPASSING","VIOLATION OF RESTRAINING ORDER","	
+DISTURBING THE PEACE","VIOLATION OF RESTRAINING ORDER","	
+THROWING OBJECT AT MOVING VEHICLE","	VIOLATION OF TEMPORARY RESTRAINING ORDER","RESISTING ARREST","DISTURBING THE PEACE","CONTEMPT OF COURT", "THROWING OBJECT AT MOVING VEHICLE","VIOLATION OF TEMPORARY RESTRAINING ORDER","RESISTING ARREST","ILLEGAL DUMPING") ~ "VIOLATION OF RULES",
+  
+TRUE ~ "OTHER CRIMES"
+    ))
+
+# converting columns to title case
+df2$crime_description <- str_to_title(df2$crime_description)
+df2$premis_desc <- str_to_title(df2$premis_desc)
+df2$weapon_description <- str_to_title(df2$weapon_description)
+df2$grouped_crime <- str_to_title(df2$grouped_crime)
+```
+
+::: {style="text-align: justify;"}
+In the data set under consideration, a comprehensive analysis of reported crimes reveals a total of 128 distinct offenses.
+These offenses have been systematically categorized into 15 main crime classifications, representing a diverse range of criminal activities.
+The primary crime categories include:
+
+1.  **Theft/Burglary:** Encompassing crimes related to unauthorized entry into premises with the intent of theft and larceny.
+
+2.  **Assault:** Involving offenses characterized by intentional harm or threat of harm to an individual.
+
+3.  **Vehicle Theft And Rule Breaks:** Pertaining to crimes associated with the unlawful taking of motor vehicles without the owner's consent.
+    Enlisting violations of established rules and regulations, potentially covering a broad spectrum of offenses.
+
+4.  **Vandalism:** Involving the intentional destruction or defacement of property, often characterized by graffiti or other forms of malicious damage.
+
+5.  **Violation of Rules:** Capturing offenses related to the breach of established regulations and guidelines.
+
+6.  **Domestic Violence:** Focusing on crimes occurring within familial or domestic settings that result in physical or emotional harm.
+
+7.  **Shoplifting:** Representing crimes involving the theft of goods or merchandise from commercial establishments.
+
+8.  **Fraud:** Encompassing deceptive practices aimed at financial gain, often involving misrepresentation or deceit.
+
+9.  **Weapons Possession:** Addressing offenses related to the unlawful possession or carrying of weapons.
+
+10. **Sexual Assault:** Covering crimes involving non-consensual sexual acts or harassment.
+
+11. **Child Abuse/Neglect:** Pertaining to offenses involving the mistreatment or neglect of children.
+
+12. **Stalking:** Involving persistent and unwanted attention or harassment towards an individual.
+
+13. **Drug Offenses:** Encompassing crimes related to the unlawful possession, distribution, or trafficking of controlled substances.
+
+14. **Animal Cruelty:** Focusing on offenses involving the mistreatment, harm, or neglect of animals.
+
+15. **Other Crimes:** A category representing a diverse range of offenses not explicitly classified within the aforementioned categories.
+
+This comprehensive categorization serves to provide a structured understanding of the various criminal activities reported in the data set, facilitating a more nuanced and detailed analysis of the prevailing law enforcement and public safety landscape.
+:::
+
+```{r, fig.height=6, echo=TRUE, results='hide'}
+# plot showing which crime occurred the most
+df2_crime_counts <- df2 %>%
+  group_by(grouped_crime) %>%
+  summarise(count = n()) %>%
+  arrange(count)
+
+# Create a bar plot
+options(scipen = 999)
+ggplot(df2_crime_counts, aes(x = reorder(grouped_crime, count), y = count)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = count), colour = "black", hjust = -0.2, size = 3) +
+  labs(
+    title = "Number of Crimes by Crime Category",
+    subtitle = "Referring to a set of 15 crime classifications\nobserved between 2020-2022",
+    x = "Crime Category",
+    y = "Number of Crimes"
+  ) +
+  coord_flip() +
+  theme_minimal_vgrid() +
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    axis.title.x = element_text(size = 12, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 12),  # Adjust the margin for better visibility
+  ) +
+  scale_y_continuous(
+    limits = c(0, 320000),
+    breaks = seq(0, 350000, 40000),
+    expand = expand_scale(mult = c(0, 0.05))
+  )
+```
+
+<br>
+
+## 5. Results
+
+#### [**Examining LA's crime counts over the past three years.**]{#title1 style="color: #165a87"}
+
+```{r}
+Cl_crime  <- read_csv(here("data_processed", "clean_crime_data.csv"))
+
+# Define the order of months
+months_order <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+ 
+# Filter data for each year and calculate monthly total crimes
+
+crimes_2020 <- Cl_crime[Cl_crime$year == 2020,]
+crimes_2020$month <- factor(crimes_2020$month, levels = months_order)
+month_wise_2020 <- crimes_2020 %>%
+  group_by(month) %>%
+  summarise(total_crimes = n()) %>%
+  arrange(desc(total_crimes))
+ 
+crimes_2021 <- Cl_crime[Cl_crime$year == 2021,]
+crimes_2021$month <- factor(crimes_2021$month, levels = months_order)
+month_wise_2021 <- crimes_2021 %>%
+  group_by(month) %>%
+  summarise(total_crimes = n()) %>%
+  arrange(desc(total_crimes))
+ 
+crimes_2022 <- Cl_crime[Cl_crime$year == 2022,]
+crimes_2022$month <- factor(crimes_2022$month, levels = months_order)
+month_wise_2022 <- crimes_2022 %>%
+  group_by(month) %>%
+  summarise(total_crimes = n()) %>%
+  arrange(desc(total_crimes))
+ 
+# Combine data for all three years
+combined_data <- rbind(
+  transform(month_wise_2020, year = 2020),
+  transform(month_wise_2021, year = 2021),
+  transform(month_wise_2022, year = 2022))
+ 
+# Reorder the months factor
+combined_data$month <- factor(combined_data$month, levels = months_order)
+
+# Create the line graph with different colors for different years 
+ggplot(combined_data, aes(x = month, y = total_crimes, group = year, color = as.factor(year))) +
+  geom_point(shape = 15, size = 1.5) +
+  geom_line() +
+  facet_wrap(vars(year), nrow = 1) +
+  labs(x = "Month", y = "Total Crimes", subtitle = "Month-wise distribution across three years") +
+  ggtitle("Annual Crime Rate Trends (2020-2022)") +
+  scale_color_manual(values = c("#FFBF00", "#008080", "maroon")) +
+  scale_y_continuous(limits = c(14000, 22000), expand = expansion(mult = c(0, 0))) +
+  theme_half_open(font_size = 12) +
+  guides(color = FALSE) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+```
+
+::: {style="text-align: justify;"}
+A comprehensive examination of yearly variations in crime rates reveals distinctive trends, notably influenced by the onset of the COVID-19 pandemic in 2020.
+This period witnessed an unforeseen reduction in reported crimes with a simultaneous surge in COVID-19 cases.
+The complex interplay of factors during this time, including pandemic-induced lockdowns and societal shifts, contributed to a nuanced relationship between the health crisis and criminal activities.
+
+In 2021, the first half of the year saw crime rates maintaining a comparatively low profile.
+However, a notable surge unfolded in the latter half, reaching its pinnacle in October, the surge in the latter half showcased a distinct escalation.
+This surge can be ascribed to a significant incident and potential influences emanating from the lingering effects of COVID-19 lockdowns.
+It's evident that the overall crime count for 2021 surpassed that of 2020.
+The intricate dynamics of societal responses to the pandemic, economic uncertainties, and shifts in law enforcement activities played pivotal roles in shaping the crime landscape during this period.
+
+The trajectory of crime rates persisted in its upward course from 2021 to 2022.
+Notably, in 2022, crime rates exceeded those of previous years.
+This escalation can be attributed to a confluence of factors, including unemployment, population growth, economic challenges, and a surge in homelessness.
+The broader impacts of the pandemic continued to exacerbate societal vulnerabilities, creating an intricate web of causation contributing to the sustained rise in crime rates over the analyzed period.
+
+The crime data analysis for Los Angeles elucidates a consistent seasonal pattern, delineated by an upswing in crime rates during the summer months (May to October) followed by a subsequent decline in the winter.
+The nexus of warmer weather and heightened outdoor activities establishes conducive conditions for criminal activities during the summer.
+Concurrently, school breaks contribute to elevated youth idleness, fostering incidents of vandalism, petty crimes, and gang violence.
+Furthermore, the surge in tourist arrivals during these months provides nefarious opportunities for pickpocketing, thefts, and scams.
+:::
+
+<br>
+
+#### [**Determining the highest crime spot in LA, assessing changes from 2020 and 2022**]{#title2 style="color: #165a87"}**.**
+
+```{r, fig.height=6}
+# Load the data file
+df <- read_csv(here("data_processed", "clean_crime_data.csv"))
+
+# finding difference of crime count between 2020 and 2022
+a <- df %>% 
+  group_by(area_name, year) %>% 
+  count() %>% 
+  ungroup() %>%  # Remove grouping
+  filter(year %in% c(2020, 2022)) %>% 
+  pivot_wider(names_from = year, values_from = n) %>% 
+  mutate(
+    year_diff = `2022` - `2020`
+  ) 
+
+# Save the data frame to a CSV file
+write.csv(a, file = file.path(here("data_processed"), "count_diff_area_name.csv") , row.names = FALSE)
+
+#filtering area names for 2020 and 2022
+count_diff_area_name = read_csv(here("data_processed", "count_diff_area_name.csv"))
+plot3 <- df %>% 
+    filter(year %in% c(2020, 2022)) %>% 
+    group_by(area_name, year) %>% 
+    count() %>% 
+    mutate(
+        year = as.factor(year)
+    ) %>% 
+    arrange(year) %>% 
+    ggplot(aes(x = n, y = fct_reorder2(area_name, year, desc(n)))) +  # Making the dumbbell chart
+    geom_line(aes(group = area_name), color = 'lightblue', size = 1) +
+    geom_point(aes(color = year), size = 2.5) + 
+    scale_color_manual(values = c('lightblue', 'steelblue')) + 
+    theme_minimal(base_size = 12) +
+    theme(
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title = element_text(size=14),
+    axis.text = element_text(size=12),
+    plot.title = element_text(face = "bold"),
+    legend.position = "none"
+    ) + 
+    labs(
+        x = "Number of crimes",
+        y = "Area Name",
+        title = "Evaluating changes in crime counts in LA (2020 vs 2022)",
+        subtitle = "Analyzing crime rate differences in areas",
+        color = "Year"
+    ) + 
+  geom_rect(aes(xmin=24000, xmax=27000, ymin=-Inf, ymax=22.5), fill="grey") +
+  geom_text(data=count_diff_area_name, aes(label=year_diff, y=area_name, x=25500), color = "black", size=3, fontface="bold") +
+  scale_x_continuous(labels = scales::comma) +
+  geom_text(data=filter(count_diff_area_name, area_name == "Central"), aes(x=25500, y=area_name, label="Difference"), color="black", size=3.7, vjust=-1.8, fontface="bold") + 
+  annotate(geom = "text", x = 10987, y = 22, label = "2020",  hjust = 0, vjust = 0.5, size = 4, color="lightblue") + 
+  annotate(geom = "text", x = 16990, y = 22, label = "2022",  hjust = 0, vjust = 0.5, size = 4, color="steelblue")
+plot3
+```
+
+::: {style="text-align: justify;"}
+The dumbbell chart visually represents changes in crime counts across different areas in Los Angeles, comparing data from 2020 to 2022.
+The y-axis denotes the names of the areas, while the x-axis illustrates the crime counts.
+The chart effectively communicates the variations in crime rates, highlighting significant differences between the two years.
+
+The areas are arranged in descending order based on their corresponding crime count differences are evident.
+Central experienced the most substantial change, with an increase of 6073 crimes from 2020 to 2022.
+Following closely is 77th Street, showing an increase of 1223 crimes.
+Pacific, with a difference of 2199 crimes, also demonstrates a notable shift in crime counts over the two years.
+On the contrary, Harbor, Hollenbeck, and Foothill are the areas with the least increase in crime counts.
+Harbor and Hollenbeck both had a minimal change of 301 crimes each, while Foothill experienced a slightly higher difference of 723 crimes.
+
+This chart serves as a concise and visually impactful tool for conveying complex information about changes in crime rates across different areas in Los Angeles.
+:::
+
+<br>
+
+#### [**Let us look at which age groups are disproportionately affected by various types of crimes in Los Angeles.**]{style="color: #165a87"}
+
+```{r}
+# Drop ages of 0, -1, -2, and -3.
+df <- df %>%
+  filter(victim_age > 0) 
+
+# Group age group in the numbers of 20
+df1 <- df %>% 
+  mutate(age_group = case_when(
+    victim_age <= 10 ~ "Less than or equal to 10",
+    (victim_age > 10 & victim_age <= 20) ~ "11-20",
+    (victim_age > 20 & victim_age <= 30) ~ "21-30",
+    (victim_age > 30 & victim_age <= 40) ~ "31-40",
+    (victim_age > 40 & victim_age <= 50) ~ "41-50",
+    (victim_age > 50 & victim_age <= 60) ~ "51-60",
+    (victim_age > 60 & victim_age <= 70) ~ "61-70",
+    (victim_age > 70 & victim_age <= 80) ~ "71-80",
+    victim_age > 80 ~ "81 & above"
+  ))
+
+# Reorder the age group levels
+df1$age_group <- fct_relevel(df1$age_group, "Less than or equal to 10", "11-20", "21-30", "31-40", "41-50", "51-60", "61-70", "71-80", "81 & above")
+
+# Filter out null victim_sex values and exclude 'X' and 'H'
+df1_filtered <- df1 %>% 
+    na.omit() %>%
+    filter(!is.na(age_group)) %>%
+    group_by(age_group) %>% 
+    count() %>% 
+    mutate(
+        is_age_grp = if_else(age_group %in% c("21-30"), "#FFBF00", "steelblue")
+    )
+
+# Make the chart
+ggplot(df1_filtered) +
+  geom_segment(aes(x = 0, xend = n, y = age_group, yend = age_group), color = '#747474') +
+  geom_point(aes(x = n, y = age_group, color = is_age_grp), size = 3) +
+  scale_color_identity() +  # Use identity scale for manual colors
+  theme_light(base_size = 12) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    plot.title = element_text(face = "bold"),
+    legend.position = "none"
+  ) +
+  labs(
+    x = "Crime Count",
+    y = "Age Group",
+    title = "Different age groups impacted by various crimes",
+    subtitle = "Understanding crime patterns in tailored groups"
+  ) +
+  scale_x_continuous(
+    labels = scales::comma,
+    expand = expand_scale(mult = c(0, 0.05))
+  )
+```
+
+According to our data, the age group most likely to become victims is between the ages of 21 and 30, then 31 to 40, 41 to 50, and so forth.
+
+<br>
+
+#### [**What are the trends in the top two crimes of LA from 2020?**]{#title3 style="color: #165a87"}
+
+```{r, fig.width=8}
+months_order <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+year_order <- c(2020, 2021, 2022)
+
+df$month <- factor(df$month, levels = months_order)
+df$year <- factor(df$year, levels = year_order)
+
+label <- "Beginning of first COVID-19 lockdown regulations"
+label1 <- "End of first COVID-19 lockdown"
+
+my_plot1 <- df %>% 
+  filter(grouped_crime == "Theft/Burglary" & year %in% c(2020, 2021, 2022)) %>% 
+  mutate(month_year = paste(month, year, sep = " ")) %>%
+  mutate(month_year = factor(month_year, levels = c(
+    "Jan 2020", "Feb 2020", "Mar 2020", "Apr 2020", "May 2020", "Jun 2020", "Jul 2020", "Aug 2020", "Sep 2020", "Oct 2020", "Nov 2020", "Dec 2020",
+    "Jan 2021", "Feb 2021", "Mar 2021", "Apr 2021", "May 2021", "Jun 2021", "Jul 2021", "Aug 2021", "Sep 2021", "Oct 2021", "Nov 2021", "Dec 2021",
+    "Jan 2022", "Feb 2022", "Mar 2022", "Apr 2022", "May 2022", "Jun 2022", "Jul 2022", "Aug 2022", "Sep 2022", "Oct 2022", "Nov 2022", "Dec 2022"
+  ))) %>% 
+  group_by(month_year) %>% 
+  summarise(count = n()) %>% 
+  ggplot(aes(x = month_year, y = count, group = 1)) +
+  geom_line(size = 0.5, color = "lightblue") +
+  geom_point(size = 1.5, color = "steelblue") +
+  labs(title = "Distribution of Theft/Burglary across years 2020-2022", x = "Month", y = "Crime Count",
+       subtitle = "Month-wise distribution across three years") +
+  theme_minimal_hgrid(font_size = 12) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    axis.text.x = element_text(size = 7),
+    plot.title = element_text(face = "bold"),
+    legend.position = "none"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels for better readability
+  scale_y_continuous(
+    limits = c(1000, 7000),
+    breaks = seq(1000, 7000, 1000),
+    expand = expand_scale(mult = c(0, 0.05))
+  ) +     
+  geom_curve(
+    data = data.frame(x = 3, xend = 1, y = 3090, yend = 6000), mapping = aes(x = x, xend = xend, y = y, yend = yend),
+    color = 'grey75', size = 0.3, curvature = -0.3, arrow = arrow(length = unit(0.01, "npc"), type = "closed")) +
+  geom_label(
+    data = data.frame(x = 2, y = 2900, label = label), mapping = aes(x = x, y = y, label = label), hjust = 0, lineheight = 0.9, size = 3) 
+    
+my_plot1 + geom_curve(
+    data = data.frame(
+      x = 21, xend = 18, y = 3600, yend = 4800),
+    mapping = aes(x = x, xend = xend, y = y, yend = yend),
+    color = 'grey75', size = 0.3, curvature = 0.3,
+    arrow = arrow(length = unit(0.01, "npc"),
+                  type = "closed")) +
+  geom_label(
+    data = data.frame(x = 20, y = 3500, label = label1),
+    mapping = aes(x = x, y = y, label = label),
+    hjust = 0, lineheight = 0.9, size = 3) 
+```
+
+::: {style="text-align: justify;"}
+The visualization depicting the incidence of the most frequently committed crime in Los Angeles, theft/burglary, revealing an overall growth from 2020 to 2022.
+
+A nuanced trajectory is notable over the period spanning from January 2020 to December 2022.
+Notably, a discernible decrease in reported cases is observed from January to December 2020, a phenomenon that can be attributed to the unprecedented global lock down restrictions imposed in response to the COVID-19 pandemic.
+During this initial year, the stringent measures worldwide led to a substantial reduction in social interactions, as individuals adhered to stay-at-home mandates and numerous commercial establishments remained closed.
+The resultant decrease in opportunities for criminal activities, particularly those related to theft and burglary, is indicative of the impact of widespread lock downs on criminal behavior.
+
+However, as the subsequent years unfolded, a noticeable shift occurred.
+In 2021 and 2022, the incidence of theft/burglary demonstrated an upward trajectory, indicating a rebound in criminal activities.
+The year 2022, in particular, witnessed the highest number of reported cases compared to the preceding two years.
+This upward trend throughout the entirety of 2022 suggests a consistent and growing pattern of theft and burglary incidents.
+The rise in cases from 2021 to 2022 may be attributed to a relaxation of lock down measures, prompting increased mobility and a resumption of commercial activities.
+The post-lock down environment potentially created more opportunities for criminal elements, contributing to the observed surge in theft and burglary incidents.
+
+The visualization not only depicts the fluctuating trend in theft/burglary cases over the three-year period but also provides a contextually rich understanding by linking these trends to external factors, such as global lock downs and subsequent societal changes.
+This analysis underscores the intricate interplay between environmental conditions and criminal activities, contributing to a more comprehensive comprehension of crime dynamics in Los Angeles.
+:::
+
+```{r, fig.width=8}
+months_order <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+year_order <- c(2020, 2021, 2022)
+df$month <- factor(df$month, levels = months_order)
+df$year <- factor(df$year, levels = year_order)
+
+my_plot2 <- df %>% 
+  filter(grouped_crime == "Assault" & year %in% c(2020, 2021, 2022)) %>% 
+  mutate(month_year = paste(month, year, sep = " ")) %>%
+  mutate(month_year = factor(month_year, levels = c(
+    "Jan 2020", "Feb 2020", "Mar 2020", "Apr 2020", "May 2020", "Jun 2020", "Jul 2020", "Aug 2020", "Sep 2020", "Oct 2020", "Nov 2020", "Dec 2020",
+    "Jan 2021", "Feb 2021", "Mar 2021", "Apr 2021", "May 2021", "Jun 2021", "Jul 2021", "Aug 2021", "Sep 2021", "Oct 2021", "Nov 2021", "Dec 2021",
+    "Jan 2022", "Feb 2022", "Mar 2022", "Apr 2022", "May 2022", "Jun 2022", "Jul 2022", "Aug 2022", "Sep 2022", "Oct 2022", "Nov 2022", "Dec 2022"
+  ))) %>% 
+  group_by(month_year) %>% 
+  summarise(count = n()) %>% 
+  ggplot(aes(x = month_year, y = count, group = 1)) +
+  geom_line(size = 0.5, color = "#D9A7BD") +
+  geom_point(size = 1.5, color = "maroon") +
+  labs(title = "Distribution of Assault across years 2020-2022", x = "Month", y = "Crime Count") +
+  theme_minimal_hgrid(font_size = 12) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    axis.text.x = element_text(size = 7),
+    plot.title = element_text(face = "bold"),
+    legend.position = "none"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels for better readability
+  scale_y_continuous(
+    limits = c(1000, 7000),
+    breaks = seq(1000, 7000, 1000),
+    expand = expand_scale(mult = c(0, 0.05))
+  )
+ggplotly(my_plot2)
+```
+
+::: {style="text-align: justify;"}
+The analysis of the plot representing the second most committed crime in Los Angeles, assault, reveals a distinctive pattern over the course of three years, from January 2020 to December 2022.
+Unlike theft/burglary, assault cases exhibit a comparatively consistent frequency without major fluctuations throughout this period.
+This stability in numbers suggests that factors influencing theft and burglary, such as lock down-related restrictions and changes in social interactions, may not have as pronounced an effect on crimes like assault.
+Potential causes may stem from deeper societal issues, including socioeconomic disparities, gang activity, and substance abuse.
+These underlying factors contribute to a more stable pattern in assault rates.
+
+During the peak lock down period in 2020, there was a noticeable increase in assault cases.
+The phenomenon could be attributed to the circumstance where individuals, compelled to stay at home, experienced heightened tensions and interpersonal conflicts.
+The close confinement and limited avenues for socialization during this period potentially contributed to an escalation in domestic altercations and assaults.
+The year 2021 stands out with the highest reported number of assault cases compared to the entire three-year span.
+This increase may be linked to the gradual easing of lock down measures, fostering increased social interactions and, consequently, a higher likelihood of conflicts leading to assault.
+
+However, a notable decrease in assault cases is observed toward the end of 2021.
+As the year 2022 unfolds, the reported cases of assault start off on a relatively low note but exhibit a steady increase from month to month until reaching a peak in October.
+The visualization of assault cases underscores the unique dynamics of this crime type, portraying a consistent occurrence with noteworthy fluctuations during peak lock down times and throughout the subsequent years.
+:::
+
+<br>
+
+#### [An illustration showcasing age and gender-specific crime statistics from 2020 to 2022.]{#title5 style="color: #165a87"}
+
+```{r}
+df <- read_csv(here("data_processed", "clean_crime_data.csv"))
+
+# Drop rows with "Unknown" ("X") values in the "victim_sex" column
+filtered_crimes <- df %>%
+    filter(victim_sex != "X") %>% 
+    filter(!is.na(victim_sex)) %>% 
+    filter(victim_sex != "-") %>% 
+    filter(victim_sex != "H")
+
+# Count the number of victims by sex
+victim_counts <- filtered_crimes %>%
+  count(victim_sex)
+ 
+custom_colors <- c("M" = "steelblue", "F" = "maroon")
+
+#plot showing which gender is mostly victimized (male OR female?) in a pie chart
+ggplot(victim_counts, aes(x = "", y = n, fill = factor(victim_sex))) +
+  geom_bar(stat = "identity", width = 1) +
+  labs(
+    title = "Gender Distribution of Crime Victims in Los Angeles (2020-2022)"
+  ) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 16),
+    legend.position = "right"
+  ) +
+  coord_polar(theta = "y") +  # This line is part of the theme
+  labs(x = NULL, y = NULL, fill = "Victim Sex") +
+  theme_void() +
+  geom_text(
+    aes(label = scales::percent(n / sum(n), accuracy = 0.1)),
+    position = position_stack(vjust = 0.5),
+    size = 4,
+    color = "white"
+  ) +
+  scale_fill_manual(values = custom_colors)
+
+```
+
+
+```{r}
+
+#annotate(geom = 'text', x = -5000, y = 8.5, label = 'Male', size = 4, color = 'steelblue') +
+  #annotate(geom = 'text', x = 3800, y = 8.5, label = 'Female', size = 4, color = 'maroon') +
+
+df1_filtered <- df1 %>% 
+    filter(victim_age > 0) %>% 
+    na.omit() %>%
+    group_by(age_group, victim_sex) %>% 
+    filter(!(victim_sex %in% c("H", "X"))) %>%
+    count() %>% 
+    mutate(n = ifelse(victim_sex == "M", -n, n))
+
+gender_plot <- ggplot(df1_filtered, aes(x = n, y = age_group, fill = victim_sex)) + 
+  geom_col() + 
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    plot.title = element_text(face = "bold"),
+    legend.position = "none"
+  ) +
+  labs(
+    x = "Crime Count",
+    y = "Age Group",
+    title = "Gender-Based Crime Distribution Across Age Groups in LA",
+    subtitle = "Across age brackets"
+  ) +
+  scale_fill_manual(values = c("maroon", "steelblue")) +
+  scale_x_continuous(
+    breaks = seq(-10000, 10000, by = 2000)
+  ) + 
+  annotate(geom = 'text', x = -5000, y = 8.5, label = 'Male', size = 4, color = 'steelblue') +
+  annotate(geom = 'text', x = 3800, y = 8.5, label = 'Female', size = 4, color = 'maroon') 
+    
+gender_plot
+```
+
+<br>
+
+## 6. Conclusion
+
+::: {style="text-align: justify;"}
+In this comprehensive exploration of crime data in Los Angeles spanning from 2020 to 2022, several key findings have emerged.
+Theft/burglary stands out as the most prevalent crime, and individuals aged 21 to 30 constitute the most frequently victimized group, geographically, Central is identified as the epicenter of crime.
+A gender-based analysis reveals a majority of male victims over female victims .
+To enhance the depth of these findings, future research could explore nationwide crime trends by analyzing datasets from other U.S. states and incorporating additional features such as latitude and longitude.
+Extending the analysis over a more extended timeframe would also offer a more nuanced understanding of evolving crime patterns.
+:::
+
+<br>
+
+## 7. Attribution
+
+All members contributed equally.
+
+<br>
+
+### Appendix
+
+```{r ref.label=knitr::all_labels()}
+#| echo: true
+#| eval: false
+```
+
+::: {style="text-align: justify;"}
+**Description -** The variables and their description of the data set are as follows:
+
+*DR_NO* - Division of Records Number: Official file number made up of a 2 digit year, area ID, and 5 digits
+
+*Date Rptd* - MM/DD/YYYY - The date of reported crime
+
+*DATE OCC* - MM/DD/YYYY - The date of crime occurred
+
+*TIME OCC* - MM/DD/YYYY - The time of crime occurred
+
+*AREA* - The LAPD has 21 Community Police Stations referred to as Geographic Areas within the department.
+These Geographic Areas are sequentially numbered from 1-21.
+
+*AREA NAME* - The 21 Geographic Areas or Patrol Divisions are also given a name designation that references a landmark or the surrounding community that it is responsible for.
+
+*Rpt Dist No.* - A four-digit code that represents a sub-area within a Geographic Area.
+
+*Crm Cd* - Indicates the crime committed.
+
+*Crm Cd Desc* - Defines the Crime Code provided.
+
+*Mocodes* - Modus Operandi: Activities associated with the suspect in commission of the crime.
+
+*Vict Age* - Victim Age
+
+*Vict Sex* - F - Female M - Male X - Unknown
+
+*Vict Descent* - Descent Code: A - Other Asian B - Black C - Chinese D - Cambodian F - Filipino G - Guamanian H - Hispanic/Latin/Mexican I - American Indian/Alaskan Native J - Japanese K - Korean L - Laotian O - Other P - Pacific Islander S - Samoan U - Hawaiian V - Vietnamese W - White X - Unknown Z - Asian Indian
+
+*Premis Cd* - The type of structure, vehicle, or location where the crime took place.
+
+*Premis Desc* - Defines the Premise Code provided.
+
+*Weapon Used Cd* - The type of weapon used in the crime.
+
+*Weapon Desc* - Defines the Weapon Used Code provided.
+
+*Status* - Status of the case.
+(IC is the default)
+
+*Status Desc* - Defines the Status Code provided.
+
+*Crm Cd 1* - Indicates the crime committed.
+Crime Code 1 is the primary and most serious one.
+Crime Code 2, 3, and 4 are respectively less serious offenses.
+Lower crime class numbers are more serious.
+
+*Crm Cd 2* - May contain a code for an additional crime, less serious than Crime Code 1.
+
+*Crm Cd 3* - May contain a code for an additional crime, less serious than Crime Code 1.
+
+*Crm Cd 4* - May contain a code for an additional crime, less serious than Crime Code 1.
+
+*LOCATION* - Street address of crime incident rounded to the nearest hundred block to maintain anonymity.
+Cross Street - Cross Street of rounded Address
+
+*LAT* - Latitude
+
+*LON* - Longtitude
+:::
