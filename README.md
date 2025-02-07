@@ -12,6 +12,10 @@ This project undertakes a thorough examination of crime patterns in Los Angeles 
 - Provide essential insights for policymakers and law enforcement.
 - Contribute to the development of targeted strategies for a safer urban environment.
 
+![ss](Super_store_db_ss.png)
+![ss](Super_store_db_ss.png)
+![ss](Super_store_db_ss.png)
+
 ## Methodology
 
 The project encompasses:
